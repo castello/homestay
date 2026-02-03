@@ -1,0 +1,36 @@
+{
+  "common": {
+    "search": "搜索",
+    "login": "登录",
+    "signup": "注册",
+    "logout": "退出",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "loading": "加载中..."
+  },
+  "home": {
+    "title": "寻找特别的住宿",
+    "search_placeholder": "你要去哪里？",
+    "featured_regions": "热门目的地",
+    "recommended": "推荐"
+  },
+  "search": {
+    "filters": "筛选",
+    "sort": "排序",
+    "no_results": "没有找到结果"
+  },
+  "accommodation": {
+    "per_night": "/晚",
+    "select_dates": "选择日期",
+    "reserve": "预订",
+    "reviews": "评价"
+  },
+  "booking": {
+    "confirm": "确认预订",
+    "payment": "立即支付",
+    "total": "总计"
+  }
+}

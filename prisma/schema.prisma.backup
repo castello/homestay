@@ -1,0 +1,1380 @@
+// ============================================================
+// 홈스테이 플랫폼 Prisma Schema
+// 68 models matching db_schema.sql
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 1. 회원 관리 (Users & Auth)
+// ============================================================
+
+model User {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  passwordHash     String?   @map("password_hash")
+  displayName      String    @map("display_name")
+  bio              String?
+  phone            String?
+  profilePhotoUrl  String?   @map("profile_photo_url")
+  preferredLanguage String   @default("ko") @map("preferred_language")
+  preferredCurrency String   @default("KRW") @map("preferred_currency")
+  role             String    @default("guest")
+  isHostApproved   Boolean   @default(false) @map("is_host_approved")
+
+  emailVerified    Boolean   @default(false) @map("email_verified")
+  phoneVerified    Boolean   @default(false) @map("phone_verified")
+  identityVerified Boolean   @default(false) @map("identity_verified")
+  identityVerifiedAt DateTime? @map("identity_verified_at")
+
+  isSuperhost      Boolean   @default(false) @map("is_superhost")
+  superhostSince   DateTime? @map("superhost_since")
+
+  loginFailCount   Int       @default(0) @map("login_fail_count")
+  lockedUntil      DateTime? @map("locked_until")
+  twoFactorEnabled Boolean   @default(false) @map("two_factor_enabled")
+
+  termsAgreedAt    DateTime  @map("terms_agreed_at")
+  privacyAgreedAt  DateTime  @map("privacy_agreed_at")
+  marketingConsent Boolean   @default(false) @map("marketing_consent")
+
+  status           String    @default("active")
+  suspensionReason String?   @map("suspension_reason")
+  suspensionUntil  DateTime? @map("suspension_until")
+  withdrawalRequestedAt DateTime? @map("withdrawal_requested_at")
+  withdrawnAt      DateTime? @map("withdrawn_at")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  socialAccounts          UserSocialAccount[]
+  refreshTokens           RefreshToken[]
+  verificationsAsUser     UserVerification[]   @relation("VerificationUser")
+  verificationsAsAdmin    UserVerification[]   @relation("VerificationAdmin")
+  notificationSettings    UserNotificationSetting[]
+  hostProfile             HostProfile?
+  accommodations          Accommodation[]      @relation("HostAccommodations")
+  approvedAccommodations  Accommodation[]      @relation("AdminApprovedAccommodations")
+  guestReservations       Reservation[]        @relation("GuestReservations")
+  hostReservations        Reservation[]        @relation("HostReservations")
+  reservationStatusChanges ReservationStatusHistory[]
+  reservationChanges      ReservationChange[]
+  payments                Payment[]
+  savedPaymentMethods     SavedPaymentMethod[]
+  settlements             Settlement[]
+  reviewsWritten          Review[]             @relation("ReviewsWritten")
+  reviewsReceived         Review[]             @relation("ReviewsReceived")
+  reviewReplies           ReviewReply[]
+  superhostEvaluations    SuperhostEvaluation[]
+  conversationsAsGuest    ConversationRoom[]   @relation("ConversationGuest")
+  conversationsAsHost     ConversationRoom[]   @relation("ConversationHost")
+  messagesSent            Message[]
+  autoMessageSettings     AutoMessageSetting[]
+  wishlistFolders         WishlistFolder[]
+  notifications           Notification[]
+  reports                 Report[]
+  reportActions           ReportAction[]
+  notices                 Notice[]
+  accommodationEditHistory AccommodationEditHistory[]
+  adminActivityLogs       AdminActivityLog[]
+  searchHistory           SearchHistory[]
+  reservationAdminMemos   ReservationAdminMemo[]
+  devices                 UserDevice[]
+  loginHistory            LoginHistory[]
+  couponUsages            CouponUsage[]
+  userAgreements          UserAgreement[]
+  accommodationViews      AccommodationView[]
+  hostPenaltiesAsHost     HostPenalty[]        @relation("PenaltyHost")
+  hostPenaltiesAsAdmin    HostPenalty[]        @relation("PenaltyAdmin")
+  commissionSettings      CommissionSetting[]
+  systemSettingsUpdated   SystemSetting[]
+
+  @@map("users")
+}
+
+model UserSocialAccount {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  provider       String
+  providerUserId String   @map("provider_user_id")
+  accessToken    String?  @map("access_token")
+  refreshToken   String?  @map("refresh_token")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerUserId])
+  @@map("user_social_accounts")
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  token      String   @unique
+  deviceInfo String?  @map("device_info")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+model UserVerification {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @map("user_id")
+  type             String
+  status           String    @default("pending")
+  documentUrl      String?   @map("document_url")
+  verificationCode String?   @map("verification_code")
+  codeExpiresAt    DateTime? @map("code_expires_at")
+  adminId          Int?      @map("admin_id")
+  adminNote        String?   @map("admin_note")
+  verifiedAt       DateTime? @map("verified_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user  User  @relation("VerificationUser", fields: [userId], references: [id])
+  admin User? @relation("VerificationAdmin", fields: [adminId], references: [id])
+
+  @@map("user_verifications")
+}
+
+model UserNotificationSetting {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  channel   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, channel])
+  @@map("user_notification_settings")
+}
+
+model HostProfile {
+  id                    Int      @id @default(autoincrement())
+  userId                Int      @unique @map("user_id")
+  bankName              String   @map("bank_name")
+  accountNumber         String   @map("account_number")
+  accountHolder         String   @map("account_holder")
+  address               String?
+  responseRate          Float    @default(0) @map("response_rate")
+  avgResponseTimeMinutes Int     @default(0) @map("avg_response_time_minutes")
+  totalReservations     Int      @default(0) @map("total_reservations")
+  totalReviews          Int      @default(0) @map("total_reviews")
+  avgRating             Float    @default(0) @map("avg_rating")
+  cancellationCount     Int      @default(0) @map("cancellation_count")
+  hostSince             DateTime @default(now()) @map("host_since")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("host_profiles")
+}
+
+// ============================================================
+// 2. 숙소 관리 (Accommodations)
+// ============================================================
+
+model Accommodation {
+  id                Int      @id @default(autoincrement())
+  hostId            Int      @map("host_id")
+  name              String
+  description       String?
+  accommodationType String   @map("accommodation_type")
+  spaceType         String   @map("space_type")
+
+  address           String
+  addressDetail     String?  @map("address_detail")
+  city              String?
+  province          String?
+  country           String   @default("KR")
+  postalCode        String?  @map("postal_code")
+  latitude          Float?
+  longitude         Float?
+
+  bedrooms          Int      @default(1)
+  bathrooms         Int      @default(1)
+  bathroomsShared   Int      @default(0) @map("bathrooms_shared")
+  maxGuests         Int      @map("max_guests")
+  baseGuests        Int      @map("base_guests")
+  areaSqm           Float?   @map("area_sqm")
+
+  basePrice         Float    @map("base_price")
+  weekendPrice      Float?   @map("weekend_price")
+  extraGuestFee     Float    @default(0) @map("extra_guest_fee")
+  cleaningFee       Float    @default(0) @map("cleaning_fee")
+
+  minNights         Int      @default(1) @map("min_nights")
+  maxNights         Int      @default(365) @map("max_nights")
+
+  checkinTime       String   @default("15:00") @map("checkin_time")
+  checkoutTime      String   @default("11:00") @map("checkout_time")
+  checkinMethod     String?  @map("checkin_method")
+  checkinGuide      String?  @map("checkin_guide")
+  preparationDays   Int      @default(0) @map("preparation_days")
+
+  cancellationPolicy String  @default("moderate") @map("cancellation_policy")
+  houseRules        String?  @map("house_rules")
+  instantBooking    Boolean  @default(false) @map("instant_booking")
+  petAllowed        Boolean  @default(false) @map("pet_allowed")
+
+  parkingType       String   @default("none") @map("parking_type")
+  parkingSpaces     Int      @default(0) @map("parking_spaces")
+
+  status            String   @default("draft")
+  adminApprovedAt   DateTime? @map("admin_approved_at")
+  adminId           Int?     @map("admin_id")
+  rejectionReason   String?  @map("rejection_reason")
+
+  avgRating         Float    @default(0) @map("avg_rating")
+  reviewCount       Int      @default(0) @map("review_count")
+  bookingCount      Int      @default(0) @map("booking_count")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  host              User     @relation("HostAccommodations", fields: [hostId], references: [id])
+  admin             User?    @relation("AdminApprovedAccommodations", fields: [adminId], references: [id])
+
+  translations      AccommodationTranslation[]
+  rooms             Room[]
+  amenities         AccommodationAmenity[]
+  photos            AccommodationPhoto[]
+  tags              AccommodationTag[]
+  seasonalPricing   SeasonalPricing[]
+  customDatePricing CustomDatePricing[]
+  longStayDiscounts LongStayDiscount[]
+  availabilityCalendar AvailabilityCalendar[]
+  editHistory       AccommodationEditHistory[]
+  reservations      Reservation[]
+  reviews           Review[]
+  conversationRooms ConversationRoom[]
+  wishlistItems     WishlistItem[]
+  featuredAccommodations FeaturedAccommodation[]
+  views             AccommodationView[]
+  viewStats         AccommodationViewStat[]
+
+  @@index([hostId])
+  @@index([status])
+  @@index([accommodationType])
+  @@index([city, province])
+  @@index([basePrice])
+  @@index([avgRating])
+  @@map("accommodations")
+}
+
+model AccommodationTranslation {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  language         String
+  name             String?
+  description      String?
+  houseRules       String?  @map("house_rules")
+  checkinGuide     String?  @map("checkin_guide")
+  isAutoTranslated Boolean  @default(false) @map("is_auto_translated")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([accommodationId, language])
+  @@map("accommodation_translations")
+}
+
+model Room {
+  id               Int    @id @default(autoincrement())
+  accommodationId  Int    @map("accommodation_id")
+  roomName         String? @map("room_name")
+  sortOrder        Int    @default(0) @map("sort_order")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+  beds          Bed[]
+
+  @@map("rooms")
+}
+
+model Bed {
+  id       Int    @id @default(autoincrement())
+  roomId   Int    @map("room_id")
+  bedType  String @map("bed_type")
+  quantity Int    @default(1)
+
+  room Room @relation(fields: [roomId], references: [id])
+
+  @@map("beds")
+}
+
+model AmenityCategory {
+  id            Int      @id @default(autoincrement())
+  name          String
+  displayNameKo String?  @map("display_name_ko")
+  displayNameEn String?  @map("display_name_en")
+  sortOrder     Int      @default(0) @map("sort_order")
+
+  amenities Amenity[]
+
+  @@map("amenity_categories")
+}
+
+model Amenity {
+  id            Int      @id @default(autoincrement())
+  categoryId    Int      @map("category_id")
+  name          String
+  displayNameKo String   @map("display_name_ko")
+  displayNameEn String?  @map("display_name_en")
+  displayNameJa String?  @map("display_name_ja")
+  displayNameZh String?  @map("display_name_zh")
+  icon          String?
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  category      AmenityCategory @relation(fields: [categoryId], references: [id])
+  accommodations AccommodationAmenity[]
+
+  @@map("amenities")
+}
+
+model AccommodationAmenity {
+  accommodationId Int    @map("accommodation_id")
+  amenityId       Int    @map("amenity_id")
+  note            String?
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+  amenity       Amenity       @relation(fields: [amenityId], references: [id])
+
+  @@id([accommodationId, amenityId])
+  @@map("accommodation_amenities")
+}
+
+model AccommodationPhoto {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  url              String
+  thumbnailUrl     String?  @map("thumbnail_url")
+  caption          String?
+  sortOrder        Int      @default(0) @map("sort_order")
+  isPrimary        Boolean  @default(false) @map("is_primary")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@index([accommodationId])
+  @@map("accommodation_photos")
+}
+
+model AccommodationTag {
+  id               Int    @id @default(autoincrement())
+  accommodationId  Int    @map("accommodation_id")
+  tagName          String @map("tag_name")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@map("accommodation_tags")
+}
+
+model SeasonalPricing {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  seasonName       String?  @map("season_name")
+  startDate        DateTime @map("start_date")
+  endDate          DateTime @map("end_date")
+  price            Float
+  weekendPrice     Float?   @map("weekend_price")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@map("seasonal_pricing")
+}
+
+model CustomDatePricing {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  date             DateTime
+  price            Float
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([accommodationId, date])
+  @@map("custom_date_pricing")
+}
+
+model LongStayDiscount {
+  id               Int   @id @default(autoincrement())
+  accommodationId  Int   @map("accommodation_id")
+  minNights        Int   @map("min_nights")
+  discountRate     Float @map("discount_rate")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([accommodationId, minNights])
+  @@map("long_stay_discounts")
+}
+
+model AvailabilityCalendar {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  date             DateTime
+  isAvailable      Boolean  @default(true) @map("is_available")
+  blockedReason    String?  @map("blocked_reason")
+  reservationId    Int?     @map("reservation_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([accommodationId, date])
+  @@index([accommodationId, date])
+  @@map("availability_calendar")
+}
+
+model AccommodationEditHistory {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  changedBy        Int      @map("changed_by")
+  fieldName        String?  @map("field_name")
+  oldValue         String?  @map("old_value")
+  newValue         String?  @map("new_value")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+  user          User          @relation(fields: [changedBy], references: [id])
+
+  @@map("accommodation_edit_history")
+}
+
+// ============================================================
+// 3. 예약 시스템 (Reservations)
+// ============================================================
+
+model Reservation {
+  id                    Int      @id @default(autoincrement())
+  reservationNumber     String   @unique @map("reservation_number")
+  guestId               Int      @map("guest_id")
+  accommodationId       Int      @map("accommodation_id")
+  hostId                Int      @map("host_id")
+
+  checkinDate           DateTime @map("checkin_date")
+  checkoutDate          DateTime @map("checkout_date")
+  nights                Int
+  adults                Int      @default(1)
+  children              Int      @default(0)
+  infants               Int      @default(0)
+
+  nightlyRate           Float    @map("nightly_rate")
+  accommodationFee      Float    @map("accommodation_fee")
+  extraGuestFee         Float    @default(0) @map("extra_guest_fee")
+  cleaningFee           Float    @default(0) @map("cleaning_fee")
+  longStayDiscount      Float    @default(0) @map("long_stay_discount")
+  guestServiceFee       Float    @default(0) @map("guest_service_fee")
+  hostServiceFee        Float    @default(0) @map("host_service_fee")
+  totalPrice            Float    @map("total_price")
+  hostPayout            Float    @map("host_payout")
+  couponId              Int?     @map("coupon_id")
+  couponDiscount        Float    @default(0) @map("coupon_discount")
+  currency              String   @default("KRW")
+
+  status                String   @default("requested")
+  isInstantBooking      Boolean  @default(false) @map("is_instant_booking")
+  guestMessage          String?  @map("guest_message")
+  cancellationReason    String?  @map("cancellation_reason")
+  cancelledAt           DateTime? @map("cancelled_at")
+  cancelledBy           String?  @map("cancelled_by")
+
+  hostResponseDeadline  DateTime? @map("host_response_deadline")
+  hostRespondedAt       DateTime? @map("host_responded_at")
+
+  checkinInfo           String?  @map("checkin_info")
+  cancellationPolicySnapshot String? @map("cancellation_policy")
+
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  guest                 User            @relation("GuestReservations", fields: [guestId], references: [id])
+  host                  User            @relation("HostReservations", fields: [hostId], references: [id])
+  accommodation         Accommodation   @relation(fields: [accommodationId], references: [id])
+  coupon                Coupon?         @relation(fields: [couponId], references: [id])
+
+  statusHistory         ReservationStatusHistory[]
+  changes               ReservationChange[]
+  payments              Payment[]
+  refunds               Refund[]
+  settlements           Settlement[]
+  reviews               Review[]
+  conversationRooms     ConversationRoom[]
+  nightlyDetails        ReservationNightlyDetail[]
+  adminMemos            ReservationAdminMemo[]
+  couponUsages          CouponUsage[]
+  hostPenalties         HostPenalty[]
+
+  @@index([guestId])
+  @@index([hostId])
+  @@index([accommodationId])
+  @@index([status])
+  @@index([checkinDate, checkoutDate])
+  @@map("reservations")
+}
+
+model ReservationStatusHistory {
+  id             Int      @id @default(autoincrement())
+  reservationId  Int      @map("reservation_id")
+  fromStatus     String?  @map("from_status")
+  toStatus       String   @map("to_status")
+  changedBy      Int?     @map("changed_by")
+  note           String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  user        User?       @relation(fields: [changedBy], references: [id])
+
+  @@map("reservation_status_history")
+}
+
+model ReservationChange {
+  id                Int       @id @default(autoincrement())
+  reservationId     Int       @map("reservation_id")
+  requestedBy       Int       @map("requested_by")
+
+  originalCheckin   DateTime? @map("original_checkin")
+  originalCheckout  DateTime? @map("original_checkout")
+  originalAdults    Int?      @map("original_adults")
+  originalChildren  Int?      @map("original_children")
+
+  newCheckin        DateTime? @map("new_checkin")
+  newCheckout       DateTime? @map("new_checkout")
+  newAdults         Int?      @map("new_adults")
+  newChildren       Int?      @map("new_children")
+
+  priceDifference   Float     @default(0) @map("price_difference")
+  status            String    @default("requested")
+  hostResponseAt    DateTime? @map("host_response_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  user        User        @relation(fields: [requestedBy], references: [id])
+
+  @@map("reservation_changes")
+}
+
+// ============================================================
+// 4. 결제 시스템 (Payments)
+// ============================================================
+
+model Payment {
+  id               Int       @id @default(autoincrement())
+  reservationId    Int       @map("reservation_id")
+  userId           Int       @map("user_id")
+
+  paymentMethod    String    @map("payment_method")
+  pgProvider       String?   @map("pg_provider")
+  pgTransactionId  String?   @map("pg_transaction_id")
+  pgReceiptUrl     String?   @map("pg_receipt_url")
+
+  amount           Float
+  currency         String    @default("KRW")
+  displayAmount    Float?    @map("display_amount")
+  displayCurrency  String?   @map("display_currency")
+  exchangeRate     Float?    @map("exchange_rate")
+
+  status           String    @default("pending")
+  paidAt           DateTime? @map("paid_at")
+  failedReason     String?   @map("failed_reason")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+  refunds     Refund[]
+
+  @@index([reservationId])
+  @@map("payments")
+}
+
+model Refund {
+  id             Int       @id @default(autoincrement())
+  paymentId      Int       @map("payment_id")
+  reservationId  Int       @map("reservation_id")
+
+  amount         Float
+  reason         String?
+  refundPolicy   String?   @map("refund_policy")
+
+  status         String    @default("requested")
+  pgRefundId     String?   @map("pg_refund_id")
+
+  requestedAt    DateTime  @default(now()) @map("requested_at")
+  processedAt    DateTime? @map("processed_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  payment     Payment     @relation(fields: [paymentId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@map("refunds")
+}
+
+model SavedPaymentMethod {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  type         String
+  cardLastFour String?  @map("card_last_four")
+  cardBrand    String?  @map("card_brand")
+  pgBillingKey String?  @map("pg_billing_key")
+  nickname     String?
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("saved_payment_methods")
+}
+
+model Settlement {
+  id               Int       @id @default(autoincrement())
+  hostId           Int       @map("host_id")
+  reservationId    Int       @map("reservation_id")
+
+  grossAmount      Float     @map("gross_amount")
+  commissionRate   Float     @map("commission_rate")
+  commissionAmount Float     @map("commission_amount")
+  netAmount        Float     @map("net_amount")
+
+  bankName         String?   @map("bank_name")
+  accountNumber    String?   @map("account_number")
+  accountHolder    String?   @map("account_holder")
+
+  status           String    @default("pending")
+  scheduledDate    DateTime? @map("scheduled_date")
+  completedAt      DateTime? @map("completed_at")
+  adminNote        String?   @map("admin_note")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  host        User        @relation(fields: [hostId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([hostId])
+  @@index([status])
+  @@map("settlements")
+}
+
+model ExchangeRate {
+  id             Int      @id @default(autoincrement())
+  baseCurrency   String   @default("KRW") @map("base_currency")
+  targetCurrency String   @map("target_currency")
+  rate           Float
+  fetchedAt      DateTime @map("fetched_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("exchange_rates")
+}
+
+model CommissionSetting {
+  id            Int       @id @default(autoincrement())
+  type          String
+  rate          Float
+  effectiveFrom DateTime  @map("effective_from")
+  effectiveTo   DateTime? @map("effective_to")
+  createdBy     Int?      @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@map("commission_settings")
+}
+
+// ============================================================
+// 5. 리뷰 시스템 (Reviews)
+// ============================================================
+
+model Review {
+  id               Int       @id @default(autoincrement())
+  reservationId    Int       @map("reservation_id")
+  reviewerId       Int       @map("reviewer_id")
+  revieweeId       Int       @map("reviewee_id")
+  accommodationId  Int?      @map("accommodation_id")
+
+  reviewType       String    @map("review_type")
+  overallRating    Float     @map("overall_rating")
+  content          String
+  privateFeedback  String?   @map("private_feedback")
+
+  isPublished      Boolean   @default(false) @map("is_published")
+  publishedAt      DateTime? @map("published_at")
+
+  isEdited         Boolean   @default(false) @map("is_edited")
+  editDeadline     DateTime? @map("edit_deadline")
+
+  isHidden         Boolean   @default(false) @map("is_hidden")
+  hiddenReason     String?   @map("hidden_reason")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  reservation   Reservation    @relation(fields: [reservationId], references: [id])
+  reviewer      User           @relation("ReviewsWritten", fields: [reviewerId], references: [id])
+  reviewee      User           @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+  accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
+
+  categoryRatings ReviewCategoryRating[]
+  photos          ReviewPhoto[]
+  reply           ReviewReply?
+
+  @@index([accommodationId])
+  @@index([reviewerId])
+  @@map("reviews")
+}
+
+model ReviewCategoryRating {
+  id       Int    @id @default(autoincrement())
+  reviewId Int    @map("review_id")
+  category String
+  rating   Float
+
+  review Review @relation(fields: [reviewId], references: [id])
+
+  @@unique([reviewId, category])
+  @@map("review_category_ratings")
+}
+
+model ReviewPhoto {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int      @map("review_id")
+  url       String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  review Review @relation(fields: [reviewId], references: [id])
+
+  @@map("review_photos")
+}
+
+model ReviewReply {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int      @unique @map("review_id")
+  userId    Int      @map("user_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  review Review @relation(fields: [reviewId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("review_replies")
+}
+
+model SuperhostEvaluation {
+  id                  Int      @id @default(autoincrement())
+  hostId              Int      @map("host_id")
+  evaluationYear      Int      @map("evaluation_year")
+  evaluationQuarter   Int      @map("evaluation_quarter")
+
+  avgRating           Float?   @map("avg_rating")
+  totalReservations   Int?     @map("total_reservations")
+  cancellationRate    Float?   @map("cancellation_rate")
+  responseRate        Float?   @map("response_rate")
+
+  isQualified         Boolean  @default(false) @map("is_qualified")
+  evaluatedAt         DateTime @default(now()) @map("evaluated_at")
+
+  host User @relation(fields: [hostId], references: [id])
+
+  @@unique([hostId, evaluationYear, evaluationQuarter])
+  @@map("superhost_evaluations")
+}
+
+// ============================================================
+// 6. 메시지 시스템 (Messages)
+// ============================================================
+
+model ConversationRoom {
+  id               Int       @id @default(autoincrement())
+  guestId          Int       @map("guest_id")
+  hostId           Int       @map("host_id")
+  accommodationId  Int?      @map("accommodation_id")
+  reservationId    Int?      @map("reservation_id")
+
+  lastMessageAt    DateTime? @map("last_message_at")
+  lastMessagePreview String? @map("last_message_preview")
+
+  isArchivedByGuest Boolean @default(false) @map("is_archived_by_guest")
+  isArchivedByHost  Boolean @default(false) @map("is_archived_by_host")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  guest         User           @relation("ConversationGuest", fields: [guestId], references: [id])
+  host          User           @relation("ConversationHost", fields: [hostId], references: [id])
+  accommodation Accommodation? @relation(fields: [accommodationId], references: [id])
+  reservation   Reservation?   @relation(fields: [reservationId], references: [id])
+
+  messages Message[]
+
+  @@index([guestId])
+  @@index([hostId])
+  @@map("conversation_rooms")
+}
+
+model Message {
+  id                  Int       @id @default(autoincrement())
+  roomId              Int       @map("room_id")
+  senderId            Int?      @map("sender_id")
+
+  content             String
+  messageType         String    @default("text") @map("message_type")
+  translatedContent   String?   @map("translated_content")
+  translatedLanguage  String?   @map("translated_language")
+
+  isRead              Boolean   @default(false) @map("is_read")
+  readAt              DateTime? @map("read_at")
+
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  room   ConversationRoom @relation(fields: [roomId], references: [id])
+  sender User?            @relation(fields: [senderId], references: [id])
+  images MessageImage[]
+
+  @@index([roomId, createdAt])
+  @@map("messages")
+}
+
+model MessageImage {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @map("message_id")
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@map("message_images")
+}
+
+model AutoMessageSetting {
+  id                  Int      @id @default(autoincrement())
+  hostId              Int      @map("host_id")
+  triggerType         String   @map("trigger_type")
+  messageContent      String   @map("message_content")
+  triggerHoursBefore  Int      @default(0) @map("trigger_hours_before")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  host User @relation(fields: [hostId], references: [id])
+
+  @@map("auto_message_settings")
+}
+
+// ============================================================
+// 7. 위시리스트 (Wishlists)
+// ============================================================
+
+model WishlistFolder {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  name       String
+  shareToken String?  @unique @map("share_token")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user  User           @relation(fields: [userId], references: [id])
+  items WishlistItem[]
+
+  @@map("wishlist_folders")
+}
+
+model WishlistItem {
+  id               Int      @id @default(autoincrement())
+  folderId         Int      @map("folder_id")
+  accommodationId  Int      @map("accommodation_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  folder        WishlistFolder @relation(fields: [folderId], references: [id])
+  accommodation Accommodation  @relation(fields: [accommodationId], references: [id])
+
+  @@unique([folderId, accommodationId])
+  @@map("wishlist_items")
+}
+
+// ============================================================
+// 8. 알림 시스템 (Notifications)
+// ============================================================
+
+model Notification {
+  id             Int       @id @default(autoincrement())
+  userId         Int       @map("user_id")
+  type           String
+  title          String
+  content        String?
+
+  referenceType  String?   @map("reference_type")
+  referenceId    Int?      @map("reference_id")
+
+  channel        String
+  isRead         Boolean   @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at")
+  sentAt         DateTime? @map("sent_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// 9. 신고 시스템 (Reports)
+// ============================================================
+
+model Report {
+  id          Int      @id @default(autoincrement())
+  reporterId  Int      @map("reporter_id")
+  targetType  String   @map("target_type")
+  targetId    Int      @map("target_id")
+  reason      String
+  description String?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  reporter User           @relation(fields: [reporterId], references: [id])
+  actions  ReportAction[]
+
+  @@index([status])
+  @@map("reports")
+}
+
+model ReportAction {
+  id        Int      @id @default(autoincrement())
+  reportId  Int      @map("report_id")
+  adminId   Int      @map("admin_id")
+  action    String
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id])
+  admin  User   @relation(fields: [adminId], references: [id])
+
+  @@map("report_actions")
+}
+
+// ============================================================
+// 10. 관리자 콘텐츠 (Admin Content)
+// ============================================================
+
+model Notice {
+  id          Int       @id @default(autoincrement())
+  authorId    Int       @map("author_id")
+  title       String
+  content     String
+  isPublished Boolean   @default(false) @map("is_published")
+  isPinned    Boolean   @default(false) @map("is_pinned")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author       User                @relation(fields: [authorId], references: [id])
+  translations NoticeTranslation[]
+
+  @@map("notices")
+}
+
+model NoticeTranslation {
+  id       Int     @id @default(autoincrement())
+  noticeId Int     @map("notice_id")
+  language String
+  title    String?
+  content  String?
+
+  notice Notice @relation(fields: [noticeId], references: [id])
+
+  @@unique([noticeId, language])
+  @@map("notice_translations")
+}
+
+model FaqCategory {
+  id        Int    @id @default(autoincrement())
+  nameKo    String @map("name_ko")
+  nameEn    String? @map("name_en")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  faqs Faq[]
+
+  @@map("faq_categories")
+}
+
+model Faq {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int      @map("category_id")
+  question    String
+  answer      String
+  sortOrder   Int      @default(0) @map("sort_order")
+  isPublished Boolean  @default(true) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category     FaqCategory      @relation(fields: [categoryId], references: [id])
+  translations FaqTranslation[]
+
+  @@map("faqs")
+}
+
+model FaqTranslation {
+  id       Int     @id @default(autoincrement())
+  faqId    Int     @map("faq_id")
+  language String
+  question String?
+  answer   String?
+
+  faq Faq @relation(fields: [faqId], references: [id])
+
+  @@unique([faqId, language])
+  @@map("faq_translations")
+}
+
+model Banner {
+  id        Int       @id @default(autoincrement())
+  title     String
+  imageUrl  String    @map("image_url")
+  linkUrl   String?   @map("link_url")
+  position  String    @default("main_top")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  isActive  Boolean   @default(true) @map("is_active")
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("banners")
+}
+
+model FeaturedAccommodation {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  sortOrder        Int      @default(0) @map("sort_order")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@map("featured_accommodations")
+}
+
+model FeaturedRegion {
+  id            Int      @id @default(autoincrement())
+  regionNameKo  String   @map("region_name_ko")
+  regionNameEn  String?  @map("region_name_en")
+  imageUrl      String?  @map("image_url")
+  searchKeyword String?  @map("search_keyword")
+  sortOrder     Int      @default(0) @map("sort_order")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("featured_regions")
+}
+
+// ============================================================
+// 11. 시스템 설정 (System)
+// ============================================================
+
+model SystemSetting {
+  id           Int      @id @default(autoincrement())
+  settingKey   String   @unique @map("setting_key")
+  settingValue String   @map("setting_value")
+  description  String?
+  updatedBy    Int?     @map("updated_by")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  updater User? @relation(fields: [updatedBy], references: [id])
+
+  @@map("system_settings")
+}
+
+model BannedWord {
+  id        Int      @id @default(autoincrement())
+  word      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("banned_words")
+}
+
+model EmailTemplate {
+  id          Int      @id @default(autoincrement())
+  templateKey String   @map("template_key")
+  language    String   @default("ko")
+  subject     String
+  body        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([templateKey, language])
+  @@map("email_templates")
+}
+
+// ============================================================
+// 12. 관리자 로그 (Admin Logs)
+// ============================================================
+
+model AdminActivityLog {
+  id         Int      @id @default(autoincrement())
+  adminId    Int      @map("admin_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   Int?     @map("target_id")
+  details    String?
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("admin_activity_logs")
+}
+
+// ============================================================
+// 13. 검색 보조 (Search)
+// ============================================================
+
+model SearchHistory {
+  id           Int       @id @default(autoincrement())
+  userId       Int       @map("user_id")
+  keyword      String
+  checkinDate  DateTime? @map("checkin_date")
+  checkoutDate DateTime? @map("checkout_date")
+  guests       Int?
+  searchedAt   DateTime  @default(now()) @map("searched_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, searchedAt])
+  @@map("search_history")
+}
+
+model PopularSearch {
+  id          Int      @id @default(autoincrement())
+  keyword     String
+  searchCount Int      @default(0) @map("search_count")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("popular_searches")
+}
+
+// ============================================================
+// 14. 예약 보조 (Reservation Support)
+// ============================================================
+
+model ReservationAdminMemo {
+  id            Int      @id @default(autoincrement())
+  reservationId Int      @map("reservation_id")
+  adminId       Int      @map("admin_id")
+  content       String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  admin       User        @relation(fields: [adminId], references: [id])
+
+  @@index([reservationId])
+  @@map("reservation_admin_memos")
+}
+
+model ReservationNightlyDetail {
+  id            Int      @id @default(autoincrement())
+  reservationId Int      @map("reservation_id")
+  date          DateTime
+  basePrice     Float    @map("base_price")
+  appliedPrice  Float    @map("applied_price")
+  priceType     String   @map("price_type")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@unique([reservationId, date])
+  @@index([reservationId])
+  @@map("reservation_nightly_details")
+}
+
+// ============================================================
+// 15. 인증/보안 (Auth & Security)
+// ============================================================
+
+model UserDevice {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  deviceToken String   @map("device_token")
+  deviceType  String   @map("device_type")
+  deviceName  String?  @map("device_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, deviceToken])
+  @@index([userId])
+  @@map("user_devices")
+}
+
+model LoginHistory {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  loginType      String   @map("login_type")
+  socialProvider String?  @map("social_provider")
+  ipAddress      String?  @map("ip_address")
+  deviceInfo     String?  @map("device_info")
+  status         String
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@map("login_history")
+}
+
+// ============================================================
+// 16. 프로모션 (Promotions)
+// ============================================================
+
+model Coupon {
+  id              Int       @id @default(autoincrement())
+  code            String    @unique
+  name            String
+  discountType    String    @map("discount_type")
+  discountValue   Float     @map("discount_value")
+  minOrderAmount  Float     @default(0) @map("min_order_amount")
+  maxDiscount     Float?    @map("max_discount")
+  validFrom       DateTime  @map("valid_from")
+  validTo         DateTime  @map("valid_to")
+  totalQuantity   Int?      @map("total_quantity")
+  usedCount       Int       @default(0) @map("used_count")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  reservations Reservation[]
+  usages       CouponUsage[]
+
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id             Int      @id @default(autoincrement())
+  couponId       Int      @map("coupon_id")
+  userId         Int      @map("user_id")
+  reservationId  Int      @map("reservation_id")
+  discountAmount Float    @map("discount_amount")
+  usedAt         DateTime @default(now()) @map("used_at")
+
+  coupon      Coupon      @relation(fields: [couponId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([couponId])
+  @@index([userId])
+  @@map("coupon_usages")
+}
+
+// ============================================================
+// 17. 약관 관리 (Terms)
+// ============================================================
+
+model TermsVersion {
+  id            Int      @id @default(autoincrement())
+  type          String
+  version       String
+  content       String
+  isCurrent     Boolean  @default(false) @map("is_current")
+  effectiveDate DateTime @map("effective_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  agreements UserAgreement[]
+
+  @@unique([type, version])
+  @@map("terms_versions")
+}
+
+model UserAgreement {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @map("user_id")
+  termsVersionId  Int      @map("terms_version_id")
+  agreedAt        DateTime @default(now()) @map("agreed_at")
+  ipAddress       String?  @map("ip_address")
+
+  user         User         @relation(fields: [userId], references: [id])
+  termsVersion TermsVersion @relation(fields: [termsVersionId], references: [id])
+
+  @@index([userId])
+  @@map("user_agreements")
+}
+
+// ============================================================
+// 18. 통계 (Analytics)
+// ============================================================
+
+model AccommodationView {
+  id               Int       @id @default(autoincrement())
+  accommodationId  Int       @map("accommodation_id")
+  userId           Int?      @map("user_id")
+  viewDate         DateTime  @map("view_date")
+  ipAddress        String?   @map("ip_address")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+  user          User?         @relation(fields: [userId], references: [id])
+
+  @@index([accommodationId, viewDate])
+  @@map("accommodation_views")
+}
+
+model AccommodationViewStat {
+  id               Int      @id @default(autoincrement())
+  accommodationId  Int      @map("accommodation_id")
+  date             DateTime
+  viewCount        Int      @default(0) @map("view_count")
+  uniqueCount      Int      @default(0) @map("unique_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accommodation Accommodation @relation(fields: [accommodationId], references: [id])
+
+  @@unique([accommodationId, date])
+  @@index([accommodationId, date])
+  @@map("accommodation_view_stats")
+}
+
+// ============================================================
+// 19. 호스트 패널티 (Host Penalties)
+// ============================================================
+
+model HostPenalty {
+  id             Int       @id @default(autoincrement())
+  hostId         Int       @map("host_id")
+  reservationId  Int?      @map("reservation_id")
+  type           String
+  description    String?
+  penaltyAction  String    @map("penalty_action")
+  adminId        Int?      @map("admin_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  host        User         @relation("PenaltyHost", fields: [hostId], references: [id])
+  reservation Reservation? @relation(fields: [reservationId], references: [id])
+  admin       User?        @relation("PenaltyAdmin", fields: [adminId], references: [id])
+
+  @@index([hostId])
+  @@map("host_penalties")
+}
