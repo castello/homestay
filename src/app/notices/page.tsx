@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Pin, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pin, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Notice {
@@ -142,31 +142,56 @@ export default function NoticesPage() {
 
             {/* Pagination */}
             {pagination && pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8">
+              <div className="flex items-center justify-center gap-1 mt-8">
+                {/* First page */}
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="첫 페이지"
+                >
+                  <ChevronsLeft className="h-5 w-5" />
+                </button>
+                {/* Previous page */}
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                   className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="이전 페이지"
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                {Array.from(
-                  { length: pagination.totalPages },
-                  (_, i) => i + 1
-                ).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={cn(
-                      'w-10 h-10 rounded-lg font-medium',
-                      page === currentPage
-                        ? 'bg-rose-500 text-white'
-                        : 'border border-gray-300 hover:bg-gray-100'
-                    )}
-                  >
-                    {page}
-                  </button>
-                ))}
+                {/* Page numbers */}
+                {(() => {
+                  const totalPages = pagination.totalPages;
+                  const maxVisible = 10;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  let endPage = startPage + maxVisible - 1;
+
+                  if (endPage > totalPages) {
+                    endPage = totalPages;
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                  }
+
+                  return Array.from(
+                    { length: endPage - startPage + 1 },
+                    (_, i) => startPage + i
+                  ).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={cn(
+                        'w-10 h-10 rounded-lg font-medium',
+                        page === currentPage
+                          ? 'bg-rose-500 text-white'
+                          : 'border border-gray-300 hover:bg-gray-100'
+                      )}
+                    >
+                      {page}
+                    </button>
+                  ));
+                })()}
+                {/* Next page */}
                 <button
                   onClick={() =>
                     setCurrentPage((p) =>
@@ -175,8 +200,18 @@ export default function NoticesPage() {
                   }
                   disabled={currentPage === pagination.totalPages}
                   className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="다음 페이지"
                 >
                   <ChevronRight className="h-5 w-5" />
+                </button>
+                {/* Last page */}
+                <button
+                  onClick={() => setCurrentPage(pagination.totalPages)}
+                  disabled={currentPage === pagination.totalPages}
+                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="마지막 페이지"
+                >
+                  <ChevronsRight className="h-5 w-5" />
                 </button>
               </div>
             )}
